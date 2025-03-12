@@ -14,3 +14,4 @@ __pycache__/
 data/
 secrets.json
 
+my_project_env/
