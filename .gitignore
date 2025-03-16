@@ -1,1 +1,15 @@
-# Ignore Python virtual environments .venv/ env/ venv/ my_project_env/ virtual/ a/ Create/ new/ environment/ #/ requirements.txt # Ignore cache and compiled files __pycache__/ *.pyc # Ignore system-specific files .DS_Store # Ignore large datasets or secret files (if any) data/ secrets.json
+# Ignore virtual environment
+venv/
+
+# Ignore output & generated data
+output/
+texts/
+config.json
+backup/
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore MacOS junk
+.DS_Store

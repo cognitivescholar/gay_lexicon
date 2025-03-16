@@ -1,90 +1,136 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+import json
+import os
+import time
+from data_acquisition import (
+    get_gutenberg_texts,
+    get_wikiquote_quotes,
+    fetch_wikipedia_texts,
+    get_internet_archive_texts,
+    fetch_reddit_texts,
+    get_wikidata_items,
+)
 
-import xml.etree.ElementTree as ET  # <-- CRUCIAL: Must be at the top
+# Load or create config file
+CONFIG_FILE = "config.json"
 
-# Import the functions from your modules.
-from data_acquisition import (get_gutenberg_texts, get_wikiquote_quotes,
-                              get_wikidata_items,
-                              get_internet_archive_texts, get_reddit_comments)
-from text_processing import preprocess_text, extract_keywords_and_phrases, assign_tone
-from lexicon import generate_lexicon
-# from utils import remove_duplicates  # Uncomment if you have this function
-import streamlit as st
+def load_config():
+    """Loads the configuration from config.json, or creates one if missing."""
+    if not os.path.exists(CONFIG_FILE):
+        print("Config file not found. Creating a new one.")
+        default_config = {
+            "project_gutenberg": {"enabled": True, "author_keywords": [], "title_keywords": []},
+            "wikiquote": {"enabled": True, "page_titles": [], "phrases": []},
+            "wikipedia": {"enabled": True, "page_titles": []},
+            "internet_archive": {
+                "enabled": True,
+                "collection": "texts",
+                "mediatype": "texts",
+                "keyword_search": "",
+                "year": "",
+            },
+            "reddit": {"enabled": True, "subreddit_names": [], "post_limit": 10, "comment_limit": 5},
+            "wikidata": {"enabled": True, "queries": []},
+        }
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(default_config, f, indent=4)
+        return default_config
+    else:
+        with open(CONFIG_FILE, "r") as f:
+            return json.load(f)
 
+def update_config(config):
+    """Saves the updated configuration to the config.json file."""
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=4)
 
 def main():
-    categories = [  # Your categories here
-        "Physical Sensations & Actions", "Explicit Sexual Acts", "Emotional Intensity & States",
-        "Contextual & Environmental Details", "Sexual Dynamics & Roles", "Sensory Descriptions",
-        "Erotic Modifiers & Adjectives", "Historical & Cultural Context", "Psychological & Emotional Descriptors",
-        "Sexual Fantasies & Imagination", "Relationship Dynamics & Intimacy", "Literary & Cinematic Influences",
-        "Dynamic Modifiers & Temporal Cues", "Academic Terms", "Gay Archetypes", "Gay Roleplay & Kink Scenarios",
-        "Kinks", "Gay Erotic Terms"
-    ]
+    """Main function to run the data collection process."""
+    config = load_config()
 
-    all_texts = []
+    # Gather input dynamically
+    if config["project_gutenberg"]["enabled"]:
+        authors = input("📚 Enter author names (comma-separated): ").strip().split(",")
+        titles = input("📖 Enter book titles (comma-separated): ").strip().split(",")
+        config["project_gutenberg"]["author_keywords"] = [a.strip() for a in authors if a.strip()]
+        config["project_gutenberg"]["title_keywords"] = [t.strip() for t in titles if t.strip()]
 
-    # --- Data Source Flags (You can control which sources to use here) ---
-    use_gutenberg = True
-    use_wikiquote = True
-    use_wikidata = True
-    use_internet_archive = True
-    use_reddit = True
+    if config["wikiquote"]["enabled"]:
+        pages = input("💬 Enter Wikiquote topics (comma-separated): ").strip().split(",")
+        phrases = input("🔍 Enter specific phrases to search for in quotes (comma-separated): ").strip().split(",")
+        config["wikiquote"]["page_titles"] = [p.strip() for p in pages if p.strip()]
+        config["wikiquote"]["phrases"] = [ph.strip() for ph in phrases if ph.strip()]
 
-    # --- Project Gutenberg ---
-    if use_gutenberg:
-        author_keywords_list = [["Oscar Wilde"]]  # Example.
-        gutenberg_texts = get_gutenberg_texts(author_keywords_list, num_books=2)
-        all_texts.extend(gutenberg_texts)
+    if config["wikipedia"]["enabled"]:
+        wiki_titles = input("🌎 Enter Wikipedia page titles (comma-separated): ").strip().split(",")
+        config["wikipedia"]["page_titles"] = [w.strip() for w in wiki_titles if w.strip()]
 
-    # --- Wikiquote ---
-    if use_wikiquote:
-        author_keywords_list = [["Gay", "Erotica"]]  # Example
-        wikiquote_quotes = get_wikiquote_quotes(author_keywords_list)
-        all_texts.extend(wikiquote_quotes)
+    if config["internet_archive"]["enabled"]:
+        keyword = input("📜 Enter keywords for Archive.org search: ").strip()
+        year = input("📅 Enter year (or leave blank for all years): ").strip()
+        config["internet_archive"]["keyword_search"] = keyword
+        config["internet_archive"]["year"] = year if year else ""
 
-    # --- Wikidata ---
-    if use_wikidata:
-        author_keywords_list = [["Gay", "Erotica"]]  # Example
-        wikidata_items = get_wikidata_items(author_keywords_list)
-        # Wikidata returns structured data, not raw text, so we need to extract
-        # the descriptions.
-        wikidata_texts = [item['description'] for item in wikidata_items]
-        all_texts.extend(wikidata_texts)
+    if config["reddit"]["enabled"]:
+        subreddits = input("👥 Enter subreddit names (comma-separated): ").strip().split(",")
+        config["reddit"]["subreddit_names"] = [s.strip() for s in subreddits if s.strip()]
 
-    # --- Internet Archive ---
-    if use_internet_archive:
-        author_keywords_list = [["Gay", "Erotica"]] # Example
-        ia_texts = get_internet_archive_texts(author_keywords_list, num_texts=2)
-        all_texts.extend(ia_texts)
+    if config["wikidata"]["enabled"]:
+        queries = input("🔍 Enter Wikidata search queries (comma-separated): ").strip().split(",")
+        config["wikidata"]["queries"] = [q.strip() for q in queries if q.strip()]
 
-    # --- Reddit ---
-    if use_reddit:
-        subreddit_name = "gay"  # Example - be mindful of subreddit rules
-        reddit_comments = get_reddit_comments(subreddit_name)
-        all_texts.extend(reddit_comments)
+    # Save the updated config
+    update_config(config)
 
-    print(f"Collected {len(all_texts)} texts.")
+    # Fetch data
+    print("\n✨ Fetching all the juicy texts... Hold on to your wigs! ⏳✨\n")
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
 
-    lexicon = generate_lexicon(categories, all_texts)
-    run_dashboard(lexicon)
+    # Create output folder
+    OUTPUT_FOLDER = "output"
+    if not os.path.exists(OUTPUT_FOLDER):
+        os.makedirs(OUTPUT_FOLDER)
 
+    # Fetch texts
+    gutenberg_texts = get_gutenberg_texts(
+        config["project_gutenberg"]["author_keywords"],
+        config["project_gutenberg"]["title_keywords"],
+    )
+    
+    wikiquote_texts = get_wikiquote_quotes(config["wikiquote"]["page_titles"], config["wikiquote"]["phrases"])
+    wikipedia_texts = fetch_wikipedia_texts(config["wikipedia"]["page_titles"])
+    archive_texts = get_internet_archive_texts(
+        config["internet_archive"]["collection"],
+        config["internet_archive"]["mediatype"],
+        config["internet_archive"]["keyword_search"],
+        config["internet_archive"]["year"],
+    )
+    reddit_texts = fetch_reddit_texts(config["reddit"]["subreddit_names"], 20, 10)
+    wikidata_entries = get_wikidata_items(config["wikidata"]["queries"])
 
-def run_dashboard(lexicon):
-    """Runs the Streamlit dashboard."""
-    st.title("Gay Life & Sexual Experiences Lexicon")
+    # Save results
+    with open(f"{OUTPUT_FOLDER}/gutenberg_texts_{timestamp}.txt", "w", encoding="utf-8") as f:
+        f.write("\n\n".join(gutenberg_texts))
+    with open(f"{OUTPUT_FOLDER}/wikiquote_quotes_{timestamp}.txt", "w", encoding="utf-8") as f:
+        f.write("\n\n".join(wikiquote_texts))
+    with open(f"{OUTPUT_FOLDER}/wikipedia_texts_{timestamp}.txt", "w", encoding="utf-8") as f:
+        f.write("\n\n".join(wikipedia_texts))
+    with open(f"{OUTPUT_FOLDER}/archive_texts_{timestamp}.txt", "w", encoding="utf-8") as f:
+        f.write("\n\n".join(archive_texts))
+    with open(f"{OUTPUT_FOLDER}/reddit_threads_{timestamp}.txt", "w", encoding="utf-8") as f:
+        f.write("\n\n".join(reddit_texts))
+    with open(f"{OUTPUT_FOLDER}/wikidata_entries_{timestamp}.txt", "w", encoding="utf-8") as f:
+        f.write("\n\n".join([f"{entry['label']}: {entry['description']}" for entry in wikidata_entries]))
 
-    # Dropdown menu to select a category
-    selected_category = st.selectbox("Choose a category:", [cat["name"] for cat in lexicon["categories"]])
+    print("\n💖 **ALL DATA FETCHED, HONEY!** 💖")
+    print("\n📚 Data breakdown:")
+    print(f"📂 Gutenberg Texts: {len(gutenberg_texts)}")
+    print(f"💬 Wikiquote Quotes: {len(wikiquote_texts)}")
+    print(f"🌎 Wikipedia Texts: {len(wikipedia_texts)}")
+    print(f"📜 Archive.org Texts: {len(archive_texts)}")
+    print(f"👥 Reddit Threads: {len(reddit_texts)}")
+    print(f"🔍 Wikidata Entries: {len(wikidata_entries)}")
 
-    # Display the selected category's terms
-    for cat in lexicon["categories"]:
-        if cat["name"] == selected_category:
-            st.header(f"{cat['name']}")
-            terms = ", ".join([kw["term"] for kw in cat["keywords"]])
-            st.write("Here are the keywords associated with this category:")
-            st.write(f"<ul>{''.join([f'<li>{term}</li>' for term in terms.split(', ')])}</ul>", unsafe_allow_html=True)
+    print("\n📂 **All data has been saved in the `output/` folder!** 💾✨")
 
 
 if __name__ == "__main__":

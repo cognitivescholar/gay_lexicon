@@ -1,10 +1,28 @@
+# Environments
+my_project_env/
+newspaper_project/
+gay_lexicon_env/
+.venv/
+env/
+venv/
+Create/
+a/
+new/
+environment/
+#/
+
+# Python cache files
 __pycache__/
 *.pyc
-*.pyo
-.git
-.vscode
+
+# System files
 .DS_Store
-venv/
-.env
-tests/
-docs/
+
+# Check path file (no longer needed, but good to ignore)
+check_path.py
+
+# Old/temporary environment files (DEFINITELY ignore these)
+temp_env.yml
+temp_env_with_name.yml
+my_project_env_packages.yml
+correct_env.yml
